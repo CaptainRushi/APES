@@ -9,6 +9,7 @@
     },
     "scripts": {
         "start": "node bin/apes.js",
+        "apes": "node bin/apes.js",
         "dev": "node --watch bin/apes.js",
         "test": "node --test src/**/*.test.js"
     },
