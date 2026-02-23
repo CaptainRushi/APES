@@ -1,0 +1,30 @@
+{
+    "name": "@apes/core",
+    "version": "2.0.0",
+    "description": "Advanced Parallel Execution System — Distributed multi-agent orchestration with dynamic task decomposition",
+    "type": "module",
+    "main": "src/index.js",
+    "bin": {
+        "apes": "./bin/apes.js"
+    },
+    "scripts": {
+        "start": "node bin/apes.js",
+        "dev": "node --watch bin/apes.js",
+        "test": "node --test src/**/*.test.js"
+    },
+    "keywords": [
+        "ai",
+        "agents",
+        "orchestration",
+        "parallel-execution",
+        "multi-agent",
+        "dag",
+        "cli"
+    ],
+    "author": "Rushi",
+    "license": "MIT",
+    "engines": {
+        "node": ">=20.0.0"
+    },
+    "dependencies": {}
+}
