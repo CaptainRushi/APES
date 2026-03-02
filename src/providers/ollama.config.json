@@ -1,0 +1,30 @@
+{
+  "baseURL": "http://localhost:11434",
+  "defaultModel": "llama3.2",
+  "streaming": true,
+  "autoDetect": true,
+  "lowResourceMode": true,
+  "maxTokensLowResource": 2048,
+  "maxParallelLocalAgents": 2,
+  "benchmarkPrompt": "Write a function that checks if a number is prime. Be concise.",
+  "modelSpecialization": {
+    "strategic_planning": "llama3.2",
+    "research_intelligence": "llama3.2",
+    "engineering": "codellama",
+    "code_quality": "codellama",
+    "version_control": "codellama",
+    "execution_automation": "codellama",
+    "memory_learning": "llama3.2",
+    "control_safety": "mistral"
+  },
+  "fallbackModel": "llama3.2",
+  "hybridMode": false,
+  "hybridClusters": [
+    "engineering",
+    "memory_learning"
+  ],
+  "degradation": {
+    "timeoutMs": 300000,
+    "cooldownMs": 120000
+  }
+}

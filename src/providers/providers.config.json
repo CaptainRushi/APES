@@ -1,0 +1,52 @@
+{
+  "defaultProvider": "auto",
+  "fallbackEnabled": true,
+  "costOptimization": true,
+  "consensusMode": false,
+  "consensusThreshold": 0.7,
+  "maxConsensusProviders": 2,
+  "hybridMode": false,
+  "hybridClusters": ["engineering", "memory_learning"],
+  "maxParallelLocalAgents": 2,
+  "providerPriority": ["anthropic", "openai", "mistral", "gemini", "local"],
+  "clusterSpecialization": {
+    "strategic_planning":    ["anthropic", "openai", "gemini", "local"],
+    "research_intelligence": ["gemini", "anthropic", "openai", "local"],
+    "engineering":           ["openai", "anthropic", "local", "ollama-codellama"],
+    "code_quality":          ["anthropic", "openai", "local"],
+    "version_control":       ["openai", "anthropic", "local"],
+    "execution_automation":  ["openai", "anthropic", "ollama-codellama", "local"],
+    "memory_learning":       ["anthropic", "openai", "local"],
+    "control_safety":        ["anthropic", "openai", "local"]
+  },
+  "defaultModels": {
+    "openai":    "gpt-4o-mini",
+    "anthropic": "claude-haiku-4-5-20251001",
+    "mistral":   "mistral-small-latest",
+    "gemini":    "gemini-1.5-flash",
+    "local":     "llama3.2"
+  },
+  "costs": {
+    "openai":    0.00015,
+    "anthropic": 0.00025,
+    "mistral":   0.0001,
+    "gemini":    0.000075,
+    "local":     0
+  },
+  "maxTokens": {
+    "openai":    16384,
+    "anthropic": 8192,
+    "mistral":   8192,
+    "gemini":    8192,
+    "local":     4096
+  },
+  "timeouts": {
+    "default":     120000,
+    "local":       180000,
+    "healthCheck":  5000
+  },
+  "degradation": {
+    "cooldownMs": 300000,
+    "maxRetries":  1
+  }
+}

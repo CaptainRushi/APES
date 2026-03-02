@@ -1,17 +1,21 @@
 /**
  * Agent Registry
- * 
+ *
  * Structured registry of all available agents organized by cluster.
  * Each agent has: id, role, skills, complexity support, performance metrics.
- * 
- * Cluster Types:
- *   1. Research Cluster    — information gathering, analysis
- *   2. Coding Cluster      — code generation, debugging, refactoring
- *   3. DevOps Cluster      — deployment, infrastructure, CI/CD
- *   4. UI/UX Cluster       — design, frontend, styling
- *   5. Analysis Cluster    — performance, testing, auditing
- *   6. Memory & Evaluation — meta-analysis, optimization tracking
+ *
+ * Cluster Types (8 clusters, 64 agents):
+ *   1. Strategic Planning       — architecture, roadmaps, decomposition, risk
+ *   2. Research Intelligence    — analysis, data gathering, domain expertise
+ *   3. Engineering              — backend, frontend, fullstack, systems
+ *   4. Code Quality             — review, debugging, refactoring, standards
+ *   5. Version Control          — git, CI/CD, release management
+ *   6. Execution Automation     — devops, infrastructure, deployment, monitoring
+ *   7. Memory Learning          — pattern recognition, optimization, evaluation
+ *   8. Control Safety           — validation, security, compliance, auditing
  */
+
+import { getDefaultAgents, getDefaultClusters, LEGACY_CLUSTER_MAP } from './agent-definitions.js';
 
 export class AgentRegistry {
     constructor() {
@@ -26,161 +30,18 @@ export class AgentRegistry {
     }
 
     initializeDefaults() {
-        // ─── Research Cluster ─────────────────────────
-        this.registerCluster('research', {
-            name: 'Research Cluster',
-            description: 'Information gathering, documentation, and analysis',
-        });
+        // Register all 8 clusters
+        for (const cluster of getDefaultClusters()) {
+            this.registerCluster(cluster.id, {
+                name: cluster.name,
+                description: cluster.description,
+            });
+        }
 
-        this.registerAgent({
-            id: 'researcher_v1',
-            role: 'research_analyst',
-            cluster: 'research',
-            skills: ['web-search', 'documentation', 'summarization', 'comparison'],
-            complexitySupported: ['simple', 'medium', 'complex'],
-            confidenceScore: 0.85,
-            avgExecutionTime: 2.0,
-        });
-
-        this.registerAgent({
-            id: 'planner_v1',
-            role: 'architect',
-            cluster: 'research',
-            skills: ['architecture', 'planning', 'decomposition', 'roadmap'],
-            complexitySupported: ['medium', 'complex'],
-            confidenceScore: 0.80,
-            avgExecutionTime: 3.0,
-        });
-
-        // ─── Coding Cluster ──────────────────────────
-        this.registerCluster('coding', {
-            name: 'Coding Cluster',
-            description: 'Code generation, debugging, refactoring, testing',
-        });
-
-        this.registerAgent({
-            id: 'code_agent_v2',
-            role: 'backend_engineer',
-            cluster: 'coding',
-            skills: ['nodejs', 'api', 'database', 'typescript', 'python'],
-            complexitySupported: ['simple', 'medium', 'complex'],
-            confidenceScore: 0.87,
-            avgExecutionTime: 3.4,
-        });
-
-        this.registerAgent({
-            id: 'code_reviewer_v1',
-            role: 'code_reviewer',
-            cluster: 'coding',
-            skills: ['review', 'security-audit', 'best-practices', 'optimization'],
-            complexitySupported: ['medium', 'complex'],
-            confidenceScore: 0.82,
-            avgExecutionTime: 2.1,
-        });
-
-        this.registerAgent({
-            id: 'debugger_v1',
-            role: 'debugger',
-            cluster: 'coding',
-            skills: ['debugging', 'error-trace', 'fix', 'testing'],
-            complexitySupported: ['simple', 'medium', 'complex'],
-            confidenceScore: 0.79,
-            avgExecutionTime: 2.8,
-        });
-
-        // ─── DevOps Cluster ──────────────────────────
-        this.registerCluster('devops', {
-            name: 'DevOps Cluster',
-            description: 'Deployment, infrastructure, CI/CD, monitoring',
-        });
-
-        this.registerAgent({
-            id: 'devops_agent_v1',
-            role: 'devops_engineer',
-            cluster: 'devops',
-            skills: ['docker', 'kubernetes', 'ci-cd', 'cloud', 'monitoring'],
-            complexitySupported: ['medium', 'complex'],
-            confidenceScore: 0.81,
-            avgExecutionTime: 4.2,
-        });
-
-        this.registerAgent({
-            id: 'infra_agent_v1',
-            role: 'infrastructure_engineer',
-            cluster: 'devops',
-            skills: ['aws', 'terraform', 'networking', 'security', 'scaling'],
-            complexitySupported: ['complex'],
-            confidenceScore: 0.76,
-            avgExecutionTime: 5.0,
-        });
-
-        // ─── UI/UX Cluster ───────────────────────────
-        this.registerCluster('uiux', {
-            name: 'UI/UX Cluster',
-            description: 'Design, frontend development, styling, animation',
-        });
-
-        this.registerAgent({
-            id: 'frontend_agent_v1',
-            role: 'frontend_engineer',
-            cluster: 'uiux',
-            skills: ['react', 'css', 'html', 'javascript', 'responsive-design'],
-            complexitySupported: ['simple', 'medium', 'complex'],
-            confidenceScore: 0.84,
-            avgExecutionTime: 3.0,
-        });
-
-        this.registerAgent({
-            id: 'designer_agent_v1',
-            role: 'ux_designer',
-            cluster: 'uiux',
-            skills: ['wireframe', 'mockup', 'color-theory', 'accessibility', 'layout'],
-            complexitySupported: ['simple', 'medium'],
-            confidenceScore: 0.78,
-            avgExecutionTime: 2.5,
-        });
-
-        // ─── Analysis Cluster ────────────────────────
-        this.registerCluster('analysis', {
-            name: 'Analysis Cluster',
-            description: 'Performance analysis, testing, auditing, benchmarks',
-        });
-
-        this.registerAgent({
-            id: 'test_agent_v1',
-            role: 'test_engineer',
-            cluster: 'analysis',
-            skills: ['unit-testing', 'integration-testing', 'e2e', 'coverage'],
-            complexitySupported: ['simple', 'medium', 'complex'],
-            confidenceScore: 0.83,
-            avgExecutionTime: 2.5,
-        });
-
-        this.registerAgent({
-            id: 'performance_agent_v1',
-            role: 'performance_analyst',
-            cluster: 'analysis',
-            skills: ['profiling', 'benchmark', 'optimization', 'bottleneck-analysis'],
-            complexitySupported: ['medium', 'complex'],
-            confidenceScore: 0.80,
-            avgExecutionTime: 4.0,
-        });
-
-        // ─── Memory & Evaluation Cluster ─────────────
-        this.registerCluster('evaluation', {
-            name: 'Memory & Evaluation Cluster',
-            description: 'Meta-analysis, optimization tracking, pattern recognition',
-        });
-
-        this.registerAgent({
-            id: 'evaluator_agent_v1',
-            role: 'meta_evaluator',
-            cluster: 'evaluation',
-            skills: ['quality-check', 'cross-validation', 'consistency-check'],
-            complexitySupported: ['medium', 'complex'],
-            confidenceScore: 0.85,
-            avgExecutionTime: 1.5,
-        });
+        // Register all 64 agents
+        for (const agent of getDefaultAgents()) {
+            this.registerAgent(agent);
+        }
     }
 
     /**
@@ -215,20 +76,47 @@ export class AgentRegistry {
     }
 
     /**
-     * Find agents matching criteria
+     * Resolve a cluster ID, supporting legacy 6-cluster IDs.
+     * @param {string} clusterId
+     * @returns {string}
+     */
+    resolveCluster(clusterId) {
+        if (this.clusters.has(clusterId)) return clusterId;
+        return LEGACY_CLUSTER_MAP[clusterId] ?? clusterId;
+    }
+
+    /**
+     * Find agents matching criteria.
+     *
+     * When a cluster filter is present we look up only the agents in that
+     * cluster via the cluster → agent-id index stored in `this.clusters`,
+     * reducing the scan from O(64) to O(cluster_size) (~8 agents on average).
+     *
      * @param {{ cluster?: string, skills?: string[], complexity?: string }} criteria
      * @returns {Agent[]}
      */
     findAgents(criteria = {}) {
-        let candidates = [...this.agents.values()];
+        let candidates;
 
         if (criteria.cluster) {
-            candidates = candidates.filter(a => a.cluster === criteria.cluster);
+            const resolved = this.resolveCluster(criteria.cluster);
+            const clusterRecord = this.clusters.get(resolved);
+            if (clusterRecord) {
+                // O(cluster_size) — typically 8 agents rather than 64
+                candidates = clusterRecord.agents
+                    .map(id => this.agents.get(id))
+                    .filter(Boolean);
+            } else {
+                candidates = [];
+            }
+        } else {
+            candidates = [...this.agents.values()];
         }
 
         if (criteria.skills && criteria.skills.length > 0) {
+            const skillSet = new Set(criteria.skills); // O(1) lookup per agent skill
             candidates = candidates.filter(a =>
-                criteria.skills.some(skill => a.skills.includes(skill))
+                a.skills.some(skill => skillSet.has(skill))
             );
         }
 

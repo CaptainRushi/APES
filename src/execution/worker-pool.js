@@ -9,7 +9,7 @@
  */
 
 export class WorkerPool {
-    constructor(maxWorkers = 8) {
+    constructor(maxWorkers = 16) {
         this.maxWorkers = maxWorkers;
         this.activeWorkers = 0;
         this.queue = [];
@@ -55,31 +55,23 @@ export class WorkerPool {
      * Currently: simulation mode for architecture validation
      */
     async runWorker(job) {
-        const { task, agentIds } = job;
+        const { task, agentIds, context } = job;
 
-        // ╔══════════════════════════════════════════════════════╗
-        // ║  INTEGRATION POINT: Replace with real LLM calls     ║
-        // ║                                                      ║
-        // ║  In production, this would:                          ║
-        // ║  1. Select LLM provider based on agent config        ║
-        // ║  2. Build prompt from task + context                 ║
-        // ║  3. Send API request                                 ║
-        // ║  4. Parse and return structured response             ║
-        // ╚══════════════════════════════════════════════════════╝
+        // ── Real LLM execution ────────────────────────────────────────────────
+        const providerRegistry = context?.providerRegistry;
+        if (providerRegistry?.isReady()) {
+            const agentId      = agentIds[0];
+            const agentRegistry = context?.agentRegistry;
+            const agent        = agentRegistry?.getAgent(agentId) ?? null;
 
-        // Simulation: process task with realistic timing
-        const processingTime = 50 + Math.random() * 200; // 50-250ms
-        await this.sleep(processingTime);
+            return await providerRegistry.execute(task, agent, context);
+        }
 
-        return {
-            output: `[${agentIds[0] || 'default'}] Processed: "${task.description}"`,
-            metadata: {
-                agentId: agentIds[0],
-                taskId: task.id,
-                processingTime: Math.round(processingTime),
-                mode: 'simulation',
-            },
-        };
+        // ── No provider configured — fail fast ──────────────────────────────
+        throw new Error(
+            `No LLM provider configured. Cannot execute task "${task.id}".\n` +
+            `Set one of: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, MISTRAL_API_KEY, or start Ollama.`
+        );
     }
 
     /**
@@ -92,10 +84,13 @@ export class WorkerPool {
     }
 
     /**
-     * Process queued tasks when a worker becomes available
+     * Process queued tasks when a worker becomes available.
+     * Drains as many queued waiters as there are free slots, preventing
+     * the race where multiple concurrent slot releases each only unblock
+     * one waiter instead of filling all available slots.
      */
     processQueue() {
-        if (this.queue.length > 0 && this.activeWorkers < this.maxWorkers) {
+        while (this.queue.length > 0 && this.activeWorkers < this.maxWorkers) {
             const next = this.queue.shift();
             next();
         }

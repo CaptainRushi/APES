@@ -27,9 +27,29 @@ export class MemorySystem {
         /** @type {Array<{timestamp: number, agentId: string, duration: number, success: boolean, complexity: string}>} */
         this.performanceMemory = [];
 
+        /**
+         * Secondary index: agentId → entries[] for O(1) agent lookup.
+         * Kept in sync with performanceMemory by recordPerformance().
+         * @type {Map<string, Array>}
+         */
+        this._agentPerfIndex = new Map();
+
+        /**
+         * Secondary index: cluster → entries[] for O(1) cluster lookup.
+         * @type {Map<string, Array>}
+         */
+        this._clusterPerfIndex = new Map();
+
         // ─── Layer 3: Skill Evolution ────────────────
         /** @type {Array<{pattern: string, optimization: string, discoveredAt: number, appliedCount: number}>} */
         this.skillEvolution = [];
+
+        /**
+         * Index: pattern string → skillEvolution entry for O(1) pattern lookup
+         * in recordPattern (replaces linear find).
+         * @type {Map<string, object>}
+         */
+        this._skillPatternIndex = new Map();
 
         // ─── Layer 4: Vector Memory (Future) ─────────
         // Will store embeddings of completed tasks for pattern matching
@@ -62,24 +82,62 @@ export class MemorySystem {
     // ═══════════════════════════════════════════════
 
     recordPerformance(entry) {
-        this.performanceMemory.push({
-            ...entry,
-            timestamp: Date.now(),
-        });
+        const record = { ...entry, timestamp: Date.now() };
+        this.performanceMemory.push(record);
 
-        // Keep only last 1000 entries in memory
+        // Maintain agentId index
+        if (entry.agentId) {
+            if (!this._agentPerfIndex.has(entry.agentId)) {
+                this._agentPerfIndex.set(entry.agentId, []);
+            }
+            this._agentPerfIndex.get(entry.agentId).push(record);
+        }
+
+        // Maintain cluster index
+        if (entry.cluster) {
+            if (!this._clusterPerfIndex.has(entry.cluster)) {
+                this._clusterPerfIndex.set(entry.cluster, []);
+            }
+            this._clusterPerfIndex.get(entry.cluster).push(record);
+        }
+
+        // Keep only last 1000 entries total; rebuild indexes on trim to stay consistent.
         if (this.performanceMemory.length > 1000) {
             this.performanceMemory = this.performanceMemory.slice(-500);
+            this._rebuildPerfIndexes();
+        }
+    }
+
+    /** @private Rebuild secondary indexes after a trim. */
+    _rebuildPerfIndexes() {
+        this._agentPerfIndex.clear();
+        this._clusterPerfIndex.clear();
+        for (const record of this.performanceMemory) {
+            if (record.agentId) {
+                if (!this._agentPerfIndex.has(record.agentId)) this._agentPerfIndex.set(record.agentId, []);
+                this._agentPerfIndex.get(record.agentId).push(record);
+            }
+            if (record.cluster) {
+                if (!this._clusterPerfIndex.has(record.cluster)) this._clusterPerfIndex.set(record.cluster, []);
+                this._clusterPerfIndex.get(record.cluster).push(record);
+            }
         }
     }
 
     getAgentPerformance(agentId) {
-        const entries = this.performanceMemory.filter(e => e.agentId === agentId);
+        // O(agent_executions) via index instead of O(all_executions) linear scan
+        const entries = this._agentPerfIndex.get(agentId);
+        if (!entries || entries.length === 0) return null;
 
-        if (entries.length === 0) return null;
+        let totalDuration = 0;
+        let successCount  = 0;
+        for (const e of entries) {
+            totalDuration += e.duration;
+            if (e.success) successCount++;
+        }
 
-        const avgDuration = entries.reduce((sum, e) => sum + e.duration, 0) / entries.length;
-        const successRate = entries.filter(e => e.success).length / entries.length;
+        const avgDuration = totalDuration / entries.length;
+        const successRate = successCount / entries.length;
         const recentTrend = this.calculateTrend(entries.slice(-10));
 
         return {
@@ -92,17 +150,21 @@ export class MemorySystem {
     }
 
     getClusterPerformance(cluster) {
-        const entries = this.performanceMemory.filter(e => e.cluster === cluster);
-        if (entries.length === 0) return null;
+        // O(cluster_executions) via index instead of O(all_executions) linear scan
+        const entries = this._clusterPerfIndex.get(cluster);
+        if (!entries || entries.length === 0) return null;
+
+        let totalDuration = 0;
+        let successCount  = 0;
+        for (const e of entries) {
+            totalDuration += e.duration;
+            if (e.success) successCount++;
+        }
 
         return {
             cluster,
-            avgDuration: Math.round(
-                entries.reduce((sum, e) => sum + e.duration, 0) / entries.length
-            ),
-            successRate: Math.round(
-                (entries.filter(e => e.success).length / entries.length) * 100
-            ) / 100,
+            avgDuration: Math.round(totalDuration / entries.length),
+            successRate: Math.round((successCount / entries.length) * 100) / 100,
         };
     }
 
@@ -111,17 +173,20 @@ export class MemorySystem {
     // ═══════════════════════════════════════════════
 
     recordPattern(pattern) {
-        const existing = this.skillEvolution.find(p => p.pattern === pattern.pattern);
+        // O(1) index lookup instead of O(n) Array.find
+        const existing = this._skillPatternIndex.get(pattern.pattern);
 
         if (existing) {
             existing.appliedCount += 1;
             existing.lastApplied = Date.now();
         } else {
-            this.skillEvolution.push({
+            const record = {
                 ...pattern,
                 discoveredAt: Date.now(),
                 appliedCount: 1,
-            });
+            };
+            this.skillEvolution.push(record);
+            this._skillPatternIndex.set(pattern.pattern, record);
         }
     }
 
@@ -190,8 +255,15 @@ export class MemorySystem {
             const data = JSON.parse(raw);
 
             this.performanceMemory = data.performanceMemory || [];
-            this.skillEvolution = data.skillEvolution || [];
-            this.vectorMemory = data.vectorMemory || [];
+            this.skillEvolution    = data.skillEvolution    || [];
+            this.vectorMemory      = data.vectorMemory      || [];
+
+            // Rebuild indexes from loaded data
+            this._rebuildPerfIndexes();
+            this._skillPatternIndex.clear();
+            for (const record of this.skillEvolution) {
+                if (record.pattern) this._skillPatternIndex.set(record.pattern, record);
+            }
         } catch {
             // No saved memory — start fresh
         }
