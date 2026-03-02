@@ -17,7 +17,7 @@ export class ComplexityScorer {
         this.thresholds = {
             simple: { max: 3, agentRange: [1, 2] },
             medium: { max: 7, agentRange: [3, 5] },
-            complex: { max: Infinity, agentRange: [5, 10] },
+            complex: { max: Infinity, agentRange: [8, 24] },
         };
 
         // Risk keywords increase complexity

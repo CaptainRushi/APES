@@ -129,4 +129,88 @@ export class TaskDecomposer {
 
         return Math.min(priority, 5);
     }
+
+    /**
+     * Async task decomposition using an LLM provider.
+     * @param {object} parsed
+     * @param {object} intent
+     * @param {import('../providers/provider-registry.js').ProviderRegistry} providerRegistry
+     */
+    async decomposeAsync(parsed, intent, providerRegistry) {
+        if (!providerRegistry || !providerRegistry.isReady()) {
+            // Fallback to synchronous regex splitting if no AI available
+            return this.decompose(parsed, intent);
+        }
+
+        const taskDesc = parsed.raw;
+
+        const systemPrompt = `You are the APES (Autonomous Parallel Execution System) Task Decomposer.
+Your job is to take a user's complex objective and break it down into a highly modular, parallelizable graph of subtasks.
+Each task should represent a specific, actionable chunk of work that can be assigned to an autonomous agent.
+Identify dependencies between tasks. Tasks that don't depend on each other will be executed in parallel.
+
+Respond ONLY with a JSON array of task objects. Do not include markdown formatting or markdown code blocks like \`\`\`json. Just the raw JSON array.
+Each task object MUST conform to this schema:
+{
+  "description": "Clear, actionable description of the task",
+  "priority": number (1-3, where 3 is highest priority/critical path),
+  "dependsOn": [array of indices (0-based) of other tasks in this array that must be completed FIRST],
+  "type": "code" | "research" | "devops" | "general" | "analysis",
+  "cluster": "engineering" | "strategic_planning" | "research_intelligence" | "code_quality" | "version_control" | "execution_automation" | "memory_learning" | "control_safety"
+}`;
+
+        const userMessage = `Decompose this objective into a task graph:\n\nObjective: "${taskDesc}"\nIntent classification: ${JSON.stringify(intent)}`;
+
+        try {
+            const input = { systemPrompt, userMessage, maxTokens: 4096, temperature: 0.2 };
+            // Empty task context, we act as a generic planner
+            const result = await providerRegistry.router.route(input, { id: 'sys-planner', description: 'Decompose constraints' }, 'complex');
+
+            let content = result.content.trim();
+            // Remove markdown json block if model ignored instructions
+            if (content.startsWith('\`\`\`json')) content = content.substring(7);
+            else if (content.startsWith('\`\`\`')) content = content.substring(3);
+            if (content.endsWith('\`\`\`')) content = content.substring(0, content.length - 3);
+            content = content.trim();
+
+            const parsedJson = JSON.parse(content);
+            if (!Array.isArray(parsedJson)) throw new Error('LLM did not return a JSON array');
+
+            const tasks = [];
+            for (let i = 0; i < parsedJson.length; i++) {
+                const item = parsedJson[i];
+                tasks.push({
+                    id: randomUUID().slice(0, 8),
+                    index: i,
+                    description: item.description || `Task ${i + 1}`,
+                    type: item.type || intent.type || 'general',
+                    cluster: item.cluster || intent.cluster,
+                    dependsOnIdx: item.dependsOn || [],
+                    status: 'pending',
+                    priority: item.priority || 2
+                });
+            }
+
+            // Map index-based dependencies to UUIDs
+            for (const task of tasks) {
+                task.dependsOn = [];
+                for (const depIdx of task.dependsOnIdx) {
+                    if (tasks[depIdx]) {
+                        task.dependsOn.push(tasks[depIdx].id);
+                    }
+                }
+                delete task.dependsOnIdx;
+            }
+
+            return {
+                tasks,
+                totalTasks: tasks.length,
+                hasParallelizable: tasks.filter(t => t.dependsOn.length === 0).length > 1,
+            };
+
+        } catch (e) {
+            console.error('\\n  [TaskDecomposer] LLM failed, falling back to regex: ' + e.message);
+            return this.decompose(parsed, intent);
+        }
+    }
 }

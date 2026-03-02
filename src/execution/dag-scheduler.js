@@ -56,40 +56,64 @@ export class DAGScheduler {
     }
 
     /**
-     * Compute parallel execution waves via topological levels
+     * Compute parallel execution waves via topological levels.
+     *
+     * Uses a Kahn's-algorithm-style BFS:
+     *   - Track in-degree (unresolved dependency count) for every node.
+     *   - Start with all zero-in-degree nodes (first wave).
+     *   - Each time a wave completes, decrement in-degree of its dependents and
+     *     add any that reach zero to the next wave.
+     *   - O(V + E) instead of the previous O(V²) re-scan approach.
+     *
+     * Does NOT mutate node.status so execution state stays clean.
      */
     computeWaves(nodes) {
+        // Build in-degree map and adjacency list using node IDs
+        const inDegree = new Map();
+        for (const [id] of nodes) {
+            inDegree.set(id, 0);
+        }
+        for (const [, node] of nodes) {
+            for (const depId of node.dependsOn) {
+                if (nodes.has(depId)) {
+                    inDegree.set(node.task.id, (inDegree.get(node.task.id) || 0) + 1);
+                }
+            }
+        }
+
         const waves = [];
-        const completed = new Set();
+        let currentWave = [];
 
-        while (completed.size < nodes.size) {
-            // Find all nodes whose dependencies are satisfied
-            const wave = [];
+        // Seed with all root nodes (no dependencies)
+        for (const [id, deg] of inDegree) {
+            if (deg === 0) currentWave.push(nodes.get(id));
+        }
 
-            for (const [id, node] of nodes) {
-                if (completed.has(id)) continue;
-                if (node.status !== 'pending') continue;
+        const visited = new Set();
 
-                const depsResolved = [...node.dependsOn].every(depId => completed.has(depId));
-                if (depsResolved) {
-                    wave.push(node);
+        while (currentWave.length > 0) {
+            waves.push(currentWave);
+
+            const nextWave = [];
+            for (const node of currentWave) {
+                visited.add(node.task.id);
+                // Notify each dependent that one of its deps is now resolved
+                for (const depId of node.dependents) {
+                    const newDeg = (inDegree.get(depId) || 1) - 1;
+                    inDegree.set(depId, newDeg);
+                    if (newDeg === 0 && !visited.has(depId)) {
+                        nextWave.push(nodes.get(depId));
+                    }
                 }
             }
 
-            if (wave.length === 0) {
-                // Cycle detection — should not happen with valid DAG
-                const remaining = [...nodes.keys()].filter(id => !completed.has(id));
-                console.error('DAG cycle detected! Remaining nodes:', remaining);
-                break;
-            }
+            currentWave = nextWave;
+        }
 
-            waves.push(wave);
-
-            // Mark wave nodes as completed (for scheduling purposes)
-            for (const node of wave) {
-                completed.add(node.task.id);
-                node.status = 'scheduled';
-            }
+        // Cycle detection
+        if (visited.size < nodes.size) {
+            const remaining = [...nodes.keys()].filter(id => !visited.has(id));
+            console.error('DAG cycle detected! Remaining nodes:', remaining);
         }
 
         return waves;
@@ -107,18 +131,90 @@ export class DAGScheduler {
         const { waves } = dag;
         const allResults = [];
         const renderer = context.renderer;
+        const anim     = context.animationEngine ?? null;
+
+        // Lazy mode: allocation is null and context carries spawner
+        const lazyMode = allocation === null && context.spawner;
+        const accumulatedAllocation = lazyMode
+            ? { agents: [], assignments: {} }
+            : null;
+        // Track already-registered agent IDs for deduplication across waves
+        const registeredAgentIds = new Set();
+
+        // Use provided allocation or the accumulator for agent lookups
+        let currentAllocation = allocation || { agents: [], assignments: {} };
 
         for (let i = 0; i < waves.length; i++) {
             const wave = waves[i];
 
-            if (renderer) {
+            // ── Lazy per-wave agent spawning ──
+            if (lazyMode) {
+                const waveTasks = wave.map(n => n.task);
+                const waveAlloc = context.spawner.allocateForWave(
+                    waveTasks, context.complexity, context.intent,
+                );
+
+                // Merge into accumulated allocation (deduplicated)
+                for (const agent of waveAlloc.agents) {
+                    if (!registeredAgentIds.has(agent.id)) {
+                        registeredAgentIds.add(agent.id);
+                        accumulatedAllocation.agents.push(agent);
+                    }
+                }
+                Object.assign(accumulatedAllocation.assignments, waveAlloc.assignments);
+
+                // Update currentAllocation so wave execution can find assignments
+                currentAllocation = {
+                    agents: accumulatedAllocation.agents,
+                    assignments: { ...accumulatedAllocation.assignments },
+                };
+
+                // Register new agents with animation engine
+                if (anim) {
+                    anim.setStatus('SPAWNING AGENTS');
+                    const agentRegistry = context.agentRegistry;
+
+                    for (const agent of waveAlloc.agents) {
+                        if (registeredAgentIds.has(agent.id)) {
+                            // Already handled above, but check if animation needs it
+                        }
+                        const cluster = agentRegistry?.clusters?.get(agent.cluster);
+                        if (cluster && typeof anim.addCluster === 'function') {
+                            anim.addCluster(agent.cluster, cluster.name);
+                        }
+                        const displayName = agent.role
+                            .split('_')
+                            .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                            .join(' ');
+                        if (typeof anim.addCluster === 'function') {
+                            anim.addAgent(agent.id, displayName, agent.cluster);
+                        } else {
+                            anim.addAgent(agent.id, displayName);
+                        }
+                        anim.setState(agent.id, 'spawning');
+                    }
+                    // Brief pause for spawn animation visibility
+                    await new Promise(r => setTimeout(r, 300));
+                    anim.setStatus('EXECUTING');
+                }
+            }
+
+            // Only print wave header when not in animation mode
+            if (renderer && !anim) {
                 this.renderWaveStart(renderer, i, wave);
             }
 
             // Execute all tasks in this wave in parallel
             const wavePromises = wave.map(async (node) => {
                 const task = node.task;
-                const assignedAgentIds = allocation.assignments[task.id] || [];
+                const assignedAgentIds = currentAllocation.assignments[task.id] || [];
+
+                // Animation: mark assigned agents as running
+                if (anim) {
+                    for (const agentId of assignedAgentIds) {
+                        anim.setState(agentId, 'running');
+                    }
+                }
 
                 try {
                     node.status = 'running';
@@ -133,21 +229,51 @@ export class DAGScheduler {
 
                     const duration = Date.now() - startTime;
 
-                    node.status = 'completed';
+                    // Verify actual output — don't mark as completed if no real output
+                    const hasRealOutput = result.output && result.output.length > 0;
+                    const resultStatus = hasRealOutput ? 'completed' : 'failed';
+
+                    node.status = resultStatus;
                     node.result = result;
 
-                    return {
+                    // Animation: mark assigned agents based on actual status
+                    if (anim) {
+                        for (const agentId of assignedAgentIds) {
+                            anim.setState(agentId, resultStatus === 'completed' ? 'completed' : 'error');
+                        }
+                    }
+
+                    const taskResult = {
                         taskId: task.id,
                         description: task.description,
-                        status: 'completed',
-                        output: result.output || 'Task completed',
+                        status: resultStatus,
+                        output: result.output || (resultStatus === 'failed' ? 'No output produced' : 'Task completed'),
                         duration,
                         agentId: assignedAgentIds[0],
                         wave: i,
                     };
+
+                    // Publish task output to message bus
+                    context.messageBus?.publish({
+                        type: 'task_output',
+                        fromAgentId: assignedAgentIds[0],
+                        taskId: task.id,
+                        channel: `task:${task.id}`,
+                        output: taskResult.output,
+                        confidence: result.metadata?.confidence ?? 0.8,
+                    });
+
+                    return taskResult;
                 } catch (error) {
                     node.status = 'failed';
                     node.result = { error: error.message };
+
+                    // Animation: mark assigned agents as error
+                    if (anim) {
+                        for (const agentId of assignedAgentIds) {
+                            anim.setState(agentId, 'error');
+                        }
+                    }
 
                     return {
                         taskId: task.id,
@@ -187,11 +313,18 @@ export class DAGScheduler {
             }
         }
 
-        return {
+        const result = {
             results: allResults,
             waves: waves.length,
             totalTasks: allResults.length,
         };
+
+        // Attach accumulated allocation for downstream consumers (learning, metrics)
+        if (lazyMode && accumulatedAllocation) {
+            result.accumulatedAllocation = accumulatedAllocation;
+        }
+
+        return result;
     }
 
     /**
