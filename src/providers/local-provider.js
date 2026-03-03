@@ -81,6 +81,11 @@ export class LocalProvider extends BaseProvider {
         const latency = Date.now() - t0;
         const content = json.message?.content ?? json.response ?? '';
 
+        // Some reasoning/thinking models (e.g. glm-4, deepseek-r1) surface their
+        // chain-of-thought in message.thinking rather than message.content.
+        // Expose it so callers can detect a live-but-thinking model response.
+        const thinking = json.message?.thinking ?? '';
+
         // Ollama provides precise token counts and timing
         const promptTokens = json.prompt_eval_count ?? BaseProvider.estimateTokens(systemPrompt + userMessage);
         const completionTokens = json.eval_count ?? BaseProvider.estimateTokens(content);
@@ -94,6 +99,7 @@ export class LocalProvider extends BaseProvider {
 
         return {
             content,
+            thinking,       // chain-of-thought from reasoning models (may be non-empty when content is '')
             model: json.model ?? this.model,
             provider: this.name,
             promptTokens,
@@ -151,7 +157,15 @@ export class LocalProvider extends BaseProvider {
                 try {
                     const json = JSON.parse(line);
                     const token = json.message?.content ?? json.response ?? '';
-                    if (token) yield token;
+                    // Reasoning models (e.g. glm-5, deepseek-r1) emit chain-of-thought in
+                    // message.thinking while message.content stays empty until the final
+                    // answer. Fall back to thinking so the stream isn't silent.
+                    const thinkToken = json.message?.thinking ?? '';
+                    if (token) {
+                        yield token;
+                    } else if (thinkToken) {
+                        yield thinkToken;
+                    }
                     if (json.done) return;
                 } catch { /* skip malformed chunk */ }
             }

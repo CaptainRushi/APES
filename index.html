@@ -3,60 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Luxury Watch Showcase</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Montserrat:wght@300;400;500&display=swap" rel="stylesheet">
+    <title>APES Calculator</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header class="header">
-        <div class="logo">
-            <span class="logo-text">CHRONOS</span>
-            <span class="logo-tagline">Swiss Timepieces</span>
+    <div class="calculator">
+        <h1>APES Calculator</h1>
+        <div class="display">
+            <input type="text" id="display" readonly value="0">
         </div>
-        <nav class="nav">
-            <a href="#" class="nav-link">Collection</a>
-            <a href="#" class="nav-link">Heritage</a>
-            <a href="#" class="nav-link">Craftsmanship</a>
-            <a href="#" class="nav-link">Contact</a>
-        </nav>
-    </header>
-
-    <main class="main">
-        <section class="hero">
-            <div class="hero-content">
-                <h1 class="hero-title">Timeless Elegance</h1>
-                <p class="hero-subtitle">Discover the art of precision engineering</p>
-                <div class="hero-divider"></div>
-            </div>
-            <div class="watch-container">
-                <canvas id="watch-canvas"></canvas>
-            </div>
-        </section>
-
-        <section class="features">
-            <div class="feature">
-                <div class="feature-icon">◆</div>
-                <h3 class="feature-title">Swiss Movement</h3>
-                <p class="feature-text">Precision-crafted automatic movement</p>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">◆</div>
-                <h3 class="feature-title">Sapphire Crystal</h3>
-                <p class="feature-text">Scratch-resistant domed glass</p>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">◆</div>
-                <h3 class="feature-title">18K Gold</h3>
-                <p class="feature-text">Hand-finished precious metals</p>
-            </div>
-        </section>
-    </main>
-
-    <footer class="footer">
-        <p class="copyright">© 2024 Chronos Timepieces. All rights reserved.</p>
-    </footer>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="js/main.js"></script>
+        <div class="buttons">
+            <button class="btn clear" onclick="clearDisplay()">C</button>
+            <button class="btn operator" onclick="appendToDisplay('/')">÷</button>
+            <button class="btn operator" onclick="appendToDisplay('*')">×</button>
+            <button class="btn operator" onclick="deleteLast()">⌫</button>
+            
+            <button class="btn" onclick="appendToDisplay('7')">7</button>
+            <button class="btn" onclick="appendToDisplay('8')">8</button>
+            <button class="btn" onclick="appendToDisplay('9')">9</button>
+            <button class="btn operator" onclick="appendToDisplay('-')">−</button>
+            
+            <button class="btn" onclick="appendToDisplay('4')">4</button>
+            <button class="btn" onclick="appendToDisplay('5')">5</button>
+            <button class="btn" onclick="appendToDisplay('6')">6</button>
+            <button class="btn operator" onclick="appendToDisplay('+')">+</button>
+            
+            <button class="btn" onclick="appendToDisplay('1')">1</button>
+            <button class="btn" onclick="appendToDisplay('2')">2</button>
+            <button class="btn" onclick="appendToDisplay('3')">3</button>
+            <button class="btn equals" onclick="calculate()">=</button>
+            
+            <button class="btn zero" onclick="appendToDisplay('0')">0</button>
+            <button class="btn" onclick="appendToDisplay('.')">.</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
 </body>
 </html>
