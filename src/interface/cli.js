@@ -160,7 +160,9 @@ export class CLI {
                         for (const t of data) stream._tasks.set(t.id, { title: t.title, status: t.status });
                         break;
                     case 'task_progress':
-                        if (stream._tasks.has(data.taskId)) stream._tasks.get(data.taskId).status = data.status;
+                        // notifyTaskProgress updates internal task map AND stops the pulsing
+                        // animation block when the task reaches a terminal state.
+                        stream.notifyTaskProgress(data.taskId, data.status);
                         break;
                     case 'file_write': stream.showWrite(data.path, data.lineCount, data.preview); break;
                     case 'file_update': stream.showUpdate(data.path, data.added, data.removed, data.diffLines); break;
@@ -626,9 +628,9 @@ export class CLI {
                                 }
                                 break;
                             case 'task_progress':
-                                if (stream._tasks.has(data.taskId)) {
-                                    stream._tasks.get(data.taskId).status = data.status;
-                                }
+                                // notifyTaskProgress updates the task map AND finalizes the
+                                // pulsing animation block when the task reaches a terminal state.
+                                stream.notifyTaskProgress(data.taskId, data.status);
                                 break;
 
                             // ─── File Operations ─────────────────────

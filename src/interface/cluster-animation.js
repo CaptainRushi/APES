@@ -35,6 +35,16 @@ const SPINNERS = ['◐', '◓', '◑', '◒'];
 /** How long (ms) after last activity before a cluster auto-collapses */
 const COLLAPSE_DELAY = 2000;
 
+// 4-frame dot cycle for running agents: gives a smooth pulse/flicker effect.
+// Characters cycle ● → ◉ → ○ → ◎ → ●  (same cycle as PulsingDotRenderer)
+const RUNNING_CYCLE_CHARS  = ['●', '◉', '○', '◎'];
+const RUNNING_CYCLE_COLORS = [
+    A.brightGreen,         // ● bright
+    A.green,               // ◉ normal
+    A.dim + A.green,       // ○ dim (hollow)
+    A.green,               // ◎ normal
+];
+
 export class ClusterAnimationEngine {
     constructor() {
         /** @type {Map<string, { id: string, name: string, agents: Map<string, AgentState> , lastActive: number }>} */
@@ -152,28 +162,59 @@ export class ClusterAnimationEngine {
 
     _dot(state) {
         switch (state) {
-            case 'idle': return `${A.dim}${A.white}${DOT}${A.reset}`;
-            case 'spawning': return this._pulse < 10 ? `${A.yellow}${DOT}${A.reset}` : `${A.dim}${A.yellow}${DOT}${A.reset}`;
-            case 'running': return this._pulse < 10 ? `${A.brightGreen}${DOT}${A.reset}` : `${A.green}${DOT}${A.reset}`;
-            case 'reviewing': return `${A.cyan}${DOT}${A.reset}`;
-            case 'learning': return `${A.blue}${DOT}${A.reset}`;
-            case 'error': return this._pulse < 5 ? `${A.brightRed}${DOT}${A.reset}` : `${A.red}${DOT}${A.reset}`;
-            case 'completed': return `${A.brightGreen}${DOT}${A.reset}`;
-            case 'terminated': return `${A.gray}${DOT}${A.reset}`;
-            default: return `${A.dim}${DOT}${A.reset}`;
+            case 'idle':
+                return `${A.dim}${A.white}${DOT}${A.reset}`;
+            case 'spawning':
+                // 2-frame yellow flash
+                return this._pulse < 10
+                    ? `${A.yellow}${DOT}${A.reset}`
+                    : `${A.dim}${A.yellow}${DOT}${A.reset}`;
+            case 'running': {
+                // 4-frame cycle: ● ◉ ○ ◎ — pulse period = 20 ticks, 4 frames of 5 ticks each
+                const idx = Math.floor(this._pulse / 5) % RUNNING_CYCLE_CHARS.length;
+                return `${RUNNING_CYCLE_COLORS[idx]}${RUNNING_CYCLE_CHARS[idx]}${A.reset}`;
+            }
+            case 'reviewing':
+                // Cyan pulse (2-frame)
+                return this._pulse < 10
+                    ? `${A.brightCyan}${DOT}${A.reset}`
+                    : `${A.cyan}${DOT}${A.reset}`;
+            case 'learning':
+                return `${A.blue}${DOT}${A.reset}`;
+            case 'error':
+                // Red flash (5-tick bright / 15-tick normal)
+                return this._pulse < 5
+                    ? `${A.brightRed}${DOT}${A.reset}`
+                    : `${A.red}${DOT}${A.reset}`;
+            case 'completed':
+                // Static bright-green dot — no animation (task is done)
+                return `${A.brightGreen}${DOT}${A.reset}`;
+            case 'terminated':
+                return `${A.gray}${DOT}${A.reset}`;
+            default:
+                return `${A.dim}${DOT}${A.reset}`;
         }
     }
 
     _coreDot() {
         switch (this.coreState) {
             case 'active': {
-                const phase = Math.floor(this._frame / 10) % 2;
-                return phase === 0 ? `${A.brightGreen}${DOT}${A.reset}` : `${A.green}${DOT}${A.reset}`;
+                // 4-frame cycle on APES CORE dot, matching agent running cycle
+                const idx = Math.floor(this._pulse / 5) % RUNNING_CYCLE_CHARS.length;
+                return `${RUNNING_CYCLE_COLORS[idx]}${RUNNING_CYCLE_CHARS[idx]}${A.reset}`;
             }
-            case 'highload': return `${A.yellow}${DOT}${A.reset}`;
-            case 'error': return this._pulse < 5 ? `${A.brightRed}${DOT}${A.reset}` : `${A.red}${DOT}${A.reset}`;
-            case 'learning': return `${A.blue}${DOT}${A.reset}`;
-            default: return `${A.dim}${A.white}${DOT}${A.reset}`;
+            case 'highload':
+                return this._pulse < 10
+                    ? `${A.yellow}${DOT}${A.reset}`
+                    : `${A.dim}${A.yellow}${DOT}${A.reset}`;
+            case 'error':
+                return this._pulse < 5
+                    ? `${A.brightRed}${DOT}${A.reset}`
+                    : `${A.red}${DOT}${A.reset}`;
+            case 'learning':
+                return `${A.blue}${DOT}${A.reset}`;
+            default:
+                return `${A.dim}${A.white}${DOT}${A.reset}`;
         }
     }
 

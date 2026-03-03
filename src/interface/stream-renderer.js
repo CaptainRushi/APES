@@ -15,6 +15,8 @@
  *   - Duration tracking
  */
 
+import { PulsingDotRenderer } from './pulsing-dot-renderer.js';
+
 export class StreamRenderer {
     constructor() {
         this.colors = {
@@ -53,6 +55,15 @@ export class StreamRenderer {
         // File tracking
         this._filesWritten = [];
         this._filesUpdated = [];
+
+        // Active pulsing block — one at a time, tracks the currently-running task cluster
+        this._pulsingRenderer = new PulsingDotRenderer({ fps: 5 });
+        /** @type {string|null} Current task ID whose cluster block is animating */
+        this._activeAnimTaskId = null;
+        /** Stash of agent descriptors for the current animated block (for stop/finalize) */
+        this._activeAnimAgents = [];
+        this._activeAnimClusterName = '';
+        this._activeAnimTaskLine = '';
     }
 
     c(color, text) {
@@ -84,6 +95,9 @@ export class StreamRenderer {
     }
 
     stop() {
+        // Finalize any still-active animated block so the terminal is clean
+        this._finalizeActiveBlock();
+
         if (this._originalConsoleLog) {
             // Unpatch and clear the live board before final summary
             if (this._taskBoardLines > 0) {
@@ -221,26 +235,97 @@ export class StreamRenderer {
     }
 
     /**
-     * Show per-task agent cluster spawn.
-     * Renders a tree: Task → cluster name → agents
+     * Show per-task agent cluster spawn with pulsing animated dots.
+     * Renders an in-place animated tree: Task → cluster name → agents
+     * The ● dots next to running agents pulse/flicker until the task completes.
      *
      * @param {{ taskId: string, taskTitle: string, clusterName: string, agents: object[], taskIndex: number, totalTasks: number }} data
      */
     showTaskAgentCluster(data) {
-        const { taskTitle, clusterName, agents, taskIndex, totalTasks } = data;
+        const { taskId, taskTitle, clusterName, agents, taskIndex, totalTasks } = data;
         if (!agents || agents.length === 0) return;
 
-        console.log(`${this.c('magenta', '●')} ${this.c('bold', `Task ${taskIndex}/${totalTasks}`)} ${this.c('dim', taskTitle.slice(0, 60))}`);
-        console.log(`   ${this.c('dim', '└─')} ${this.c('cyan', '●')} ${this.c('bold', `${clusterName} Cluster`)} ${this.c('dim', `[${agents.length} agents]`)}`);
+        // Finalize any prior animated block before starting a new one
+        this._finalizeActiveBlock();
 
-        for (let i = 0; i < agents.length; i++) {
-            const a = agents[i];
-            const isLast = i === agents.length - 1;
-            const prefix = isLast ? '└─' : '├─';
-            const indent = ' '.repeat(i);
-            console.log(`        ${indent}${this.c('dim', prefix)}${this.c('green', '●')} ${this.c('white', a.name || a.role)}`);
+        // Build the static top task line (magenta ● is intentionally static — it marks the task)
+        const taskLine =
+            `${this.c('magenta', '●')} ${this.c('bold', `Task ${taskIndex}/${totalTasks}`)} ` +
+            `${this.c('dim', taskTitle.slice(0, 60))}`;
+
+        // Build agent descriptor list for the pulsing renderer
+        const agentEntries = agents.map((a, i) => ({
+            prefix: i === agents.length - 1 ? '└─' : '├─',
+            indent: ' '.repeat(i),
+            name:   a.name || a.role || `agent-${i + 1}`,
+            state:  'running',   // all agents start in running state when first shown
+        }));
+
+        // Track animation state so task_progress events can stop it
+        this._activeAnimTaskId     = taskId;
+        this._activeAnimAgents     = agentEntries;
+        this._activeAnimClusterName = clusterName;
+        this._activeAnimTaskLine   = taskLine;
+
+        // Start the animated block — this replaces the old static console.log calls
+        this._pulsingRenderer.startBlock({
+            taskLine,
+            clusterName,
+            agentCount: agents.length,
+            agents: agentEntries,
+        });
+    }
+
+    /**
+     * Finalize (stop + commit) the currently active pulsing block, if any.
+     * Builds static final lines that match the original non-animated style,
+     * but with the completed state reflected.
+     *
+     * @param {'completed'|'failed'|null} [outcome=null]  If null, uses 'completed'.
+     */
+    _finalizeActiveBlock(outcome = null) {
+        if (!this._activeAnimTaskId) return;
+
+        const taskId      = this._activeAnimTaskId;
+        const agents      = this._activeAnimAgents;
+        const clusterName = this._activeAnimClusterName;
+        const taskLine    = this._activeAnimTaskLine;
+
+        // Reset tracking state before calling stopBlock so re-entrant calls are safe
+        this._activeAnimTaskId      = null;
+        this._activeAnimAgents      = [];
+        this._activeAnimClusterName = '';
+        this._activeAnimTaskLine    = '';
+
+        // Derive final dot and color per agent based on their current state
+        const c = this.c.bind(this);
+        const finalLines = [];
+
+        finalLines.push(taskLine);
+
+        // Cluster header — use static cyan dot once done
+        finalLines.push(
+            `   ${c('dim', '└─')} ${c('cyan', '●')} ${c('bold', `${clusterName} Cluster`)} ` +
+            `${c('dim', `[${agents.length} agents]`)}`
+        );
+
+        for (const ag of agents) {
+            // If the individual agent was explicitly marked, use that; otherwise derive from outcome
+            const state = ag.state !== 'running' ? ag.state : (outcome ?? 'completed');
+            let dot;
+            if (state === 'completed') {
+                dot = c('brightGreen', '✔');
+            } else if (state === 'failed') {
+                dot = c('red', '✗');
+            } else {
+                dot = c('green', '●');
+            }
+            finalLines.push(`        ${ag.indent}${c('dim', ag.prefix)}${dot} ${c('white', ag.name)}`);
         }
-        console.log('');
+
+        finalLines.push('');
+
+        this._pulsingRenderer.stopBlock(finalLines);
     }
 
     // ─── Agent Activity ───────────────────────────────────────────
@@ -288,9 +373,35 @@ export class StreamRenderer {
         }
     }
 
+    /**
+     * Notify the renderer that a task's status has changed.
+     * When the active animated task reaches a terminal state (completed/failed),
+     * the pulsing block is finalized and replaced with a static version.
+     *
+     * This is called by the CLI executeTask event dispatcher for 'task_progress' events.
+     *
+     * @param {string} taskId
+     * @param {string} status  'in_progress' | 'completed' | 'failed'
+     */
+    notifyTaskProgress(taskId, status) {
+        // Update internal task map
+        const task = this._tasks.get(taskId);
+        if (task) task.status = status;
+
+        // If this is the task whose animation block is currently showing, finalize it
+        if (taskId === this._activeAnimTaskId &&
+            (status === 'completed' || status === 'failed')) {
+            this._finalizeActiveBlock(status);
+        }
+    }
+
     // ─── File Operations ──────────────────────────────────────────
 
     showWrite(filePath, lineCount, previewLines) {
+        // Finalize any active animation block — file writes indicate the agent is producing output
+        // so the cluster tree should be committed before the file-write lines scroll past.
+        this._finalizeActiveBlock('completed');
+
         console.log(`${this.c('green', '●')} ${this.c('bold', `Write(${filePath})`)}`);
         console.log(`  ${this.c('dim', '⎿')} ${this.c('dim', `Wrote ${lineCount} lines to ${filePath}`)}`);
 
@@ -310,6 +421,8 @@ export class StreamRenderer {
     }
 
     showUpdate(filePath, addedLines, removedLines, diffLines) {
+        this._finalizeActiveBlock('completed');
+
         console.log(`${this.c('yellow', '●')} ${this.c('bold', `Update(${filePath})`)}`);
         console.log(`  ${this.c('dim', '⎿')} ${this.c('dim', `Added ${addedLines} lines, removed ${removedLines} lines`)}`);
 
@@ -333,6 +446,8 @@ export class StreamRenderer {
     }
 
     showShell(command, output) {
+        this._finalizeActiveBlock('completed');
+
         console.log(`${this.c('cyan', '●')} ${this.c('bold', `Shell(${command})`)}`);
         if (output) {
             console.log(`  ${this.c('dim', '⎿')} ${this.c('dim', output.slice(0, 120))}`);
@@ -417,6 +532,10 @@ export class StreamRenderer {
     // ─── Generic Log (legacy compat) ──────────────────────────────
 
     log(message) {
+        // Any generic log output means the current animated block is no longer the front-most
+        // content — finalize it so the animation doesn't fight with scrolling text.
+        this._finalizeActiveBlock('completed');
+
         // Map legacy animation log messages to structured output
         if (message.startsWith('Tool: write_file')) {
             const detail = message.match(/\((.*?)\)/);

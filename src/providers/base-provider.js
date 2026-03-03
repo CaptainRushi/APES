@@ -237,7 +237,7 @@ export class BaseProvider {
 
     /**
      * @param {{ systemPrompt: string, userMessage: string, maxTokens?: number, temperature?: number }} input
-     * @returns {Promise<{ content: string, model: string, provider: string, promptTokens: number, completionTokens: number, totalTokens: number, latency: number, cost: number }>}
+     * @returns {Promise<{ content: string, thinking?: string, model: string, provider: string, promptTokens: number, completionTokens: number, totalTokens: number, latency: number, cost: number }>}
      */
     async generate(input) {  // eslint-disable-line no-unused-vars
         throw new Error(`${this.name} must implement generate()`);

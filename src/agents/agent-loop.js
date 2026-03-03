@@ -192,6 +192,15 @@ export class AgentLoop {
                     );
                 }
 
+                // Fail fast on empty/whitespace-only responses — provider is non-functional
+                if (typeof llmResponse === 'string' && llmResponse.trim().length === 0) {
+                    throw new Error(
+                        'LLM returned an empty response. The provider may not be functioning.\n' +
+                        'Check that Ollama is running with: ollama list\n' +
+                        'Or set a valid API key: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY'
+                    );
+                }
+
                 // ─── CRITICAL FIX: Extract files BEFORE processing tool calls ───
                 // LLMs often output both code blocks AND <tool_call name="task_complete">.
                 // If we check for tools first, we'll exit without writing the extracted files!
@@ -280,8 +289,9 @@ export class AgentLoop {
 
                 // ─── Force continuation on prose-only response ──────────────
                 // If the LLM gave prose without code, demand code output.
-                // Allow up to 5 retries before giving up (not just 2).
-                if (this._iteration <= 5 && this._filesWritten.length === 0) {
+                // Hard cap at 3 retries to avoid infinite loops with non-functional providers.
+                const MAX_FORCE_RETRIES = 3;
+                if (this._iteration <= MAX_FORCE_RETRIES && this._filesWritten.length === 0) {
                     this.context.addMessage('assistant', llmResponse);
                     // Log what the LLM returned so we can diagnose extraction failures
                     const responsePreview = llmResponse.slice(0, 300).replace(/\n/g, '\\n');
@@ -301,6 +311,24 @@ export class AgentLoop {
                         `Do NOT describe what to do — actually write the code NOW. Start with the first file immediately.`);
                     this._emit('loop:forced-continuation', { agentId: this.agentId, iteration: this._iteration });
                     continue;
+                }
+
+                // Hard fail: exceeded retry limit with no files produced
+                if (this._filesWritten.length === 0 && this._iteration > MAX_FORCE_RETRIES) {
+                    this._running = false;
+                    this._emit('loop:error', {
+                        agentId: this.agentId,
+                        error: `No files produced after ${this._iteration} iterations`,
+                    });
+                    throw new Error(
+                        `Agent failed to produce any files after ${this._iteration} iterations. ` +
+                        'The LLM provider may not be generating usable code.\n' +
+                        'Possible causes:\n' +
+                        '  - Ollama model is too small to follow tool-call instructions\n' +
+                        '  - API key is invalid or rate-limited\n' +
+                        '  - Provider returned prose instead of code\n' +
+                        'Try: OPENAI_API_KEY=sk-... or ANTHROPIC_API_KEY=sk-ant-...'
+                    );
                 }
 
                 // Step 6: LLM gave a final text response with no code — we're done

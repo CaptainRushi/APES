@@ -1,0 +1,53 @@
+ The New Execution Pipeline
+
+  User Request
+    │
+    ▼
+  Stage 1: Task Analysis (NO LLM)
+    ├─ Extract intent, domain, risk level
+    ├─ Identify expected outputs
+    └─ Define failure conditions
+    │
+    ▼
+  Stage 2: Spawn 5 Control Agents (deterministic)
+    ├─ SpecificationAgent  → function signatures, file structure
+    ├─ ConstraintAgent     → what LLM MUST NOT do
+    ├─ HallucinationGuard  → anti-hallucination rules
+    ├─ CodeQualityAgent    → naming, complexity, error handling
+    └─ VerificationAgent   → validation criteria
+    │
+    ▼
+  Stage 3: Build Controlled Prompt
+    └─ PromptBuilder combines all agent outputs
+       into a structured, constrained prompt
+    │
+    ▼
+  Stage 4: LLM Execution (constrained)
+    ├─ temperature: 0.1 (deterministic)
+    ├─ Retry with exponential backoff (2s/4s)
+    └─ LLM receives ONLY the structured prompt
+    │
+    ▼
+  Stage 5: Post-Generation Validation
+    ├─ Syntax validation (bracket balance, strings)
+    ├─ Import validation (no imaginary modules)
+    ├─ Constraint compliance (no secrets, no deps)
+    ├─ Placeholder detection ("TODO", "implement")
+    └─ Structural checks (exports, patterns)
+    │
+    ▼
+  Stage 6: Adaptive Regeneration (if validation fails)
+    ├─ Inject failure context
+    ├─ Tighten constraints per violation type
+    ├─ Reduce temperature, increase token budget
+    └─ Max 3 retries
+
+  Key Design Decisions
+
+  - Control agents are pure logic — no LLM calls, instant execution, deterministic
+  - RepoAnalyzer now wired in — real framework detection, language stats, dependency analysis
+  - Existing AgentLoop preserved — it still handles tool calls/file writes, but receives the controlled prompt instead of raw user input
+  - Zero new dependencies — all Node.js builtins
+  - All existing tests pass — no regressions
+
+  Try running a task now — you should see the control agents analyzing before the LLM executes.

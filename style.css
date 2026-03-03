@@ -1,0 +1,155 @@
+/* APES Calculator Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.calculator {
+    background: #1a1a2e;
+    border-radius: 20px;
+    padding: 25px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    width: 100%;
+    max-width: 350px;
+}
+
+.calculator-name {
+    text-align: center;
+    color: #e94560;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+    letter-spacing: 2px;
+}
+
+.display {
+    background: #16213e;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: right;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.display-expression {
+    color: #888;
+    font-size: 1rem;
+    min-height: 24px;
+    word-wrap: break-word;
+    word-break: break-all;
+}
+
+.display-value {
+    color: #fff;
+    font-size: 2.5rem;
+    font-weight: bold;
+    word-wrap: break-word;
+    word-break: break-all;
+}
+
+.buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.btn {
+    padding: 20px;
+    font-size: 1.3rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    aspect-ratio: 1;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-number {
+    background: #0f3460;
+    color: #fff;
+}
+
+.btn-number:hover {
+    background: #1a4a7a;
+}
+
+.btn-operator {
+    background: #e94560;
+    color: #fff;
+}
+
+.btn-operator:hover {
+    background: #ff6b81;
+}
+
+.btn-clear {
+    background: #ff9f43;
+    color: #fff;
+}
+
+.btn-clear:hover {
+    background: #ffb065;
+}
+
+.btn-equals {
+    background: #10ac84;
+    color: #fff;
+    grid-column: span 2;
+    aspect-ratio: auto;
+}
+
+.btn-equals:hover {
+    background: #1dd1a1;
+}
+
+.btn-zero {
+    grid-column: span 2;
+    aspect-ratio: auto;
+}
+
+@media (max-width: 400px) {
+    .calculator {
+        padding: 15px;
+    }
+    
+    .btn {
+        padding: 15px;
+        font-size: 1.1rem;
+    }
+    
+    .display-value {
+        font-size: 2rem;
+    }
+}
+
+.btn:active {
+    transform: scale(0.95);
+}
+
+.btn:focus {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
